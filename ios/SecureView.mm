@@ -16,9 +16,8 @@ using namespace facebook::react;
 @implementation SecureView {
     UITextField *_secureTextField;
     UIView *_containerView;
-    UIView *_fallbackContainerView;
+    UIView *_captureView;
     BOOL _isPreventingCapture;
-    BOOL _hasFallbackComponent;
 }
 
 + (ComponentDescriptorProvider)componentDescriptorProvider
@@ -40,12 +39,12 @@ using namespace facebook::react;
 
 - (void)setupSecureView
 {
-    // Create fallback container view (shown when screenshot is taken)
-    _fallbackContainerView = [[UIView alloc] init];
-    _fallbackContainerView.translatesAutoresizingMaskIntoConstraints = NO;
-    _fallbackContainerView.backgroundColor = [UIColor whiteColor]; // Default white background
+    // Create capture detection view (shown when screenshot is taken)
+    _captureView = [[UIView alloc] init];
+    _captureView.translatesAutoresizingMaskIntoConstraints = NO;
+    _captureView.backgroundColor = [UIColor clearColor]; // Default capture background
     
-    // Create container view for main child components
+    // Create container view for child components
     _containerView = [[UIView alloc] init];
     _containerView.translatesAutoresizingMaskIntoConstraints = NO;
     _containerView.backgroundColor = [UIColor clearColor];
@@ -59,7 +58,7 @@ using namespace facebook::react;
     _secureTextField.secureTextEntry = YES; // Enable screenshot prevention
     
     // Important: Add views in correct order
-    [self addSubview:_fallbackContainerView];
+    [self addSubview:_captureView];
     [self addSubview:_secureTextField];
     
     // Setup constraints
@@ -67,7 +66,6 @@ using namespace facebook::react;
     
     // Default state
     _isPreventingCapture = YES;
-    _hasFallbackComponent = NO;
     
     // Setup the protector view after the text field is ready
     [self performSelector:@selector(setupProtectorView) withObject:nil afterDelay:0.1];
@@ -132,11 +130,11 @@ using namespace facebook::react;
         [_secureTextField.topAnchor constraintEqualToAnchor:self.topAnchor],
         [_secureTextField.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
         
-        // Fallback container view constraints
-        [_fallbackContainerView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_fallbackContainerView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [_fallbackContainerView.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [_fallbackContainerView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor]
+        // Capture view constraints
+        [_captureView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [_captureView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        [_captureView.topAnchor constraintEqualToAnchor:self.topAnchor],
+        [_captureView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor]
     ]];
 }
 
@@ -177,52 +175,14 @@ using namespace facebook::react;
 
 - (void)mountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index
 {
-    // Check if this is a FallbackComponent or main content
-    // FallbackComponent is typically mounted last or has a specific identifier
-    // For now, we'll use a simple approach: first child goes to main container,
-    // second child (if exists) goes to fallback container
-    
-    if (index == 0) {
-        // Main content
-        childComponentView.translatesAutoresizingMaskIntoConstraints = NO;
-        [_containerView addSubview:childComponentView];
-        
-        // Setup constraints for main content
-        [NSLayoutConstraint activateConstraints:@[
-            [childComponentView.leadingAnchor constraintEqualToAnchor:_containerView.leadingAnchor],
-            [childComponentView.trailingAnchor constraintEqualToAnchor:_containerView.trailingAnchor],
-            [childComponentView.topAnchor constraintEqualToAnchor:_containerView.topAnchor],
-            [childComponentView.bottomAnchor constraintEqualToAnchor:_containerView.bottomAnchor]
-        ]];
-    } else if (index == 1) {
-        // FallbackComponent
-        _hasFallbackComponent = YES;
-        
-        // Clear default white background if we have a fallback component
-        _fallbackContainerView.backgroundColor = [UIColor clearColor];
-        
-        childComponentView.translatesAutoresizingMaskIntoConstraints = NO;
-        [_fallbackContainerView addSubview:childComponentView];
-        
-        // Setup constraints for fallback content
-        [NSLayoutConstraint activateConstraints:@[
-            [childComponentView.leadingAnchor constraintEqualToAnchor:_fallbackContainerView.leadingAnchor],
-            [childComponentView.trailingAnchor constraintEqualToAnchor:_fallbackContainerView.trailingAnchor],
-            [childComponentView.topAnchor constraintEqualToAnchor:_fallbackContainerView.topAnchor],
-            [childComponentView.bottomAnchor constraintEqualToAnchor:_fallbackContainerView.bottomAnchor]
-        ]];
-    }
+    // Add children directly to container view
+    childComponentView.translatesAutoresizingMaskIntoConstraints = NO;
+    [_containerView insertSubview:childComponentView atIndex:index];
 }
 
 - (void)unmountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index
 {
     [childComponentView removeFromSuperview];
-    
-    if (index == 1) {
-        // FallbackComponent was removed, restore default white background
-        _hasFallbackComponent = NO;
-        _fallbackContainerView.backgroundColor = [UIColor whiteColor];
-    }
 }
 
 Class<RCTComponentViewProtocol> SecureViewCls(void)
