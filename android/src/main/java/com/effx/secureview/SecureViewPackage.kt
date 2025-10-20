@@ -12,4 +12,8 @@ class SecureViewPackage : ReactPackage {
     viewManagers.add(SecureViewManager())
     return viewManagers
   }
+
+  override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
+    return emptyList()
+  }
 }
