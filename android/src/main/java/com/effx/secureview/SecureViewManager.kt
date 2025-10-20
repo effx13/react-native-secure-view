@@ -21,7 +21,9 @@ class SecureViewManager : ViewGroupManager<SecureView>(), SecureViewManagerInter
   }
 
   override fun createViewInstance(context: ThemedReactContext): SecureView {
-    return SecureView(context)
+    return SecureView(context).apply {
+      isHermesEnabled = true
+    }
   }
 
   @ReactProp(name = "enable", defaultBoolean = true)

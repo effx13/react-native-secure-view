@@ -27,4 +27,15 @@ class SecureView(context: Context) : FrameLayout(context) {
         e.printStackTrace()
       }
     }
+
+  override fun onDetachedFromWindow() {
+    super.onDetachedFromWindow()
+
+    try {
+      val activity = (context as? ThemedReactContext)?.currentActivity
+      activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
 }
