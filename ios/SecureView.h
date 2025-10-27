@@ -6,6 +6,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@interface SecureTextField : UITextField
+@end
+
 @interface SecureView : RCTViewComponentView
 @end
 

@@ -9,15 +9,45 @@
 
 using namespace facebook::react;
 
+@implementation SecureTextField
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event
+{
+  for (UIView *subview in self.subviews.reverseObjectEnumerator) {
+    CGPoint convertedPoint = [subview convertPoint:point fromView:self];
+    UIView *hitView = [subview hitTest:convertedPoint withEvent:event];
+    if (hitView) {
+      return hitView;
+    }
+  }
+  
+  return nil;
+}
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event
+{
+  for (UIView *subview in self.subviews) {
+    CGPoint convertedPoint = [subview convertPoint:point fromView:self];
+    if ([subview pointInside:convertedPoint withEvent:event]) {
+      return YES;
+    }
+  }
+  
+  return NO;
+}
+
+@end
+
 @interface SecureView () <RCTSecureViewViewProtocol>
 
 @end
 
 @implementation SecureView {
-    UITextField *_secureTextField;
+    SecureTextField *_secureTextField;
     UIView *_containerView;
-    UIView *_captureView;
+    UIView *_protectorView;
     BOOL _isPreventingCapture;
+    NSArray<NSLayoutConstraint *> *_containerConstraints;
 }
 
 + (ComponentDescriptorProvider)componentDescriptorProvider
@@ -39,26 +69,22 @@ using namespace facebook::react;
 
 - (void)setupSecureView
 {
-    // Create capture detection view (shown when screenshot is taken)
-    _captureView = [[UIView alloc] init];
-    _captureView.translatesAutoresizingMaskIntoConstraints = NO;
-    _captureView.backgroundColor = [UIColor clearColor]; // Default capture background
-    
     // Create container view for child components
     _containerView = [[UIView alloc] init];
     _containerView.translatesAutoresizingMaskIntoConstraints = NO;
     _containerView.backgroundColor = [UIColor clearColor];
+    _containerView.userInteractionEnabled = YES;
     
     // Create secure text field (this is the key to screenshot prevention)
-    _secureTextField = [[UITextField alloc] init];
+    _secureTextField = [[SecureTextField alloc] init];
     _secureTextField.translatesAutoresizingMaskIntoConstraints = NO;
     _secureTextField.borderStyle = UITextBorderStyleNone;
     _secureTextField.backgroundColor = [UIColor clearColor];
-    _secureTextField.userInteractionEnabled = NO;
+    _secureTextField.userInteractionEnabled = YES;
     _secureTextField.secureTextEntry = YES; // Enable screenshot prevention
+    _secureTextField.enabled = NO; // Disable edit
     
     // Important: Add views in correct order
-    [self addSubview:_captureView];
     [self addSubview:_secureTextField];
     
     // Setup constraints
@@ -66,58 +92,54 @@ using namespace facebook::react;
     
     // Default state
     _isPreventingCapture = YES;
-    
-    // Setup the protector view after the text field is ready
-    [self performSelector:@selector(setupProtectorView) withObject:nil afterDelay:0.1];
+}
+
+- (void)layoutSubviews
+{
+  [super layoutSubviews];
+  
+  [self setupProtectorView];
 }
 
 - (void)setupProtectorView
 {
-    // Find the protector view (UITextFieldLabel or similar internal view)
-    UIView *protectorView = nil;
+    if (_protectorView) return;
+  
     
     // The secure text field creates internal subviews that get hidden during screenshots
     for (UIView *subview in _secureTextField.subviews) {
-        NSString *className = NSStringFromClass([subview class]);
-        // Look for the internal view that gets hidden (usually has frame CGRectZero or is UITextFieldLabel)
-        if ([className containsString:@"UITextFieldLabel"] ||
-            [className containsString:@"CanvasView"] ||
-            CGRectEqualToRect(subview.frame, CGRectZero)) {
-            protectorView = subview;
-            break;
-        }
+        _protectorView = subview;
+        break;
     }
     
-    if (!protectorView && _secureTextField.subviews.count > 0) {
-        // If we can't find a specific view, use the first subview
-        protectorView = _secureTextField.subviews.firstObject;
-    }
-    
-    if (!protectorView) {
+    if (!_protectorView) {
         // Create our own view if no suitable subview exists
-        protectorView = [[UIView alloc] init];
-        protectorView.translatesAutoresizingMaskIntoConstraints = NO;
-        [_secureTextField addSubview:protectorView];
+        _protectorView = [[UIView alloc] init];
+        [_secureTextField addSubview:_protectorView];
     }
     
     // Add container to the protector view
-    protectorView.translatesAutoresizingMaskIntoConstraints = NO;
-    [protectorView addSubview:_containerView];
+    _protectorView.translatesAutoresizingMaskIntoConstraints = NO;
+    _protectorView.userInteractionEnabled = YES;
+    [_protectorView addSubview:_containerView];
+  
+    // Enable interaction for container
+    _containerView.userInteractionEnabled = YES;
     
     // Make protector view fill the text field
     [NSLayoutConstraint activateConstraints:@[
-        [protectorView.leadingAnchor constraintEqualToAnchor:_secureTextField.leadingAnchor],
-        [protectorView.trailingAnchor constraintEqualToAnchor:_secureTextField.trailingAnchor],
-        [protectorView.topAnchor constraintEqualToAnchor:_secureTextField.topAnchor],
-        [protectorView.bottomAnchor constraintEqualToAnchor:_secureTextField.bottomAnchor]
+        [_protectorView.leadingAnchor constraintEqualToAnchor:_secureTextField.leadingAnchor],
+        [_protectorView.trailingAnchor constraintEqualToAnchor:_secureTextField.trailingAnchor],
+        [_protectorView.topAnchor constraintEqualToAnchor:_secureTextField.topAnchor],
+        [_protectorView.bottomAnchor constraintEqualToAnchor:_secureTextField.bottomAnchor]
     ]];
     
     // Make container fill the protector view
     [NSLayoutConstraint activateConstraints:@[
-        [_containerView.leadingAnchor constraintEqualToAnchor:protectorView.leadingAnchor],
-        [_containerView.trailingAnchor constraintEqualToAnchor:protectorView.trailingAnchor],
-        [_containerView.topAnchor constraintEqualToAnchor:protectorView.topAnchor],
-        [_containerView.bottomAnchor constraintEqualToAnchor:protectorView.bottomAnchor]
+        [_containerView.leadingAnchor constraintEqualToAnchor:_protectorView.leadingAnchor],
+        [_containerView.trailingAnchor constraintEqualToAnchor:_protectorView.trailingAnchor],
+        [_containerView.topAnchor constraintEqualToAnchor:_protectorView.topAnchor],
+        [_containerView.bottomAnchor constraintEqualToAnchor:_protectorView.bottomAnchor]
     ]];
 }
 
@@ -129,12 +151,6 @@ using namespace facebook::react;
         [_secureTextField.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
         [_secureTextField.topAnchor constraintEqualToAnchor:self.topAnchor],
         [_secureTextField.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-        
-        // Capture view constraints
-        [_captureView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_captureView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [_captureView.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [_captureView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor]
     ]];
 }
 
@@ -148,25 +164,36 @@ using namespace facebook::react;
         _isPreventingCapture = newViewProps.enable;
         _secureTextField.secureTextEntry = _isPreventingCapture;
         
+        if (_containerConstraints) {
+            [NSLayoutConstraint deactivateConstraints:_containerConstraints];
+        }
+      
         // If disabling protection, ensure content is visible
         if (!_isPreventingCapture) {
-            _secureTextField.hidden = YES;
             _containerView.hidden = NO;
+            _secureTextField.hidden = YES;
             // Move container view to self if protection is disabled
             [_containerView removeFromSuperview];
+          
             [self addSubview:_containerView];
             [self sendSubviewToBack:_containerView];
             
-            [NSLayoutConstraint activateConstraints:@[
+            _containerConstraints = @[
                 [_containerView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
                 [_containerView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
                 [_containerView.topAnchor constraintEqualToAnchor:self.topAnchor],
                 [_containerView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor]
-            ]];
+            ];
+          
+            [NSLayoutConstraint activateConstraints:_containerConstraints];
         } else {
             _secureTextField.hidden = NO;
-            // Re-setup the protector view when enabling
-            [self setupProtectorView];
+            if (!_protectorView) {
+                [self setupProtectorView];
+            } else {
+                [_containerView removeFromSuperview];
+                [_protectorView addSubview:_containerView];
+            }
         }
     }
     
